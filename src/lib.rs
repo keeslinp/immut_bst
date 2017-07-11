@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod node;
 mod errors;
 #[cfg(test)]

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::rc::Rc;
 use errors::Errors;
 type Pair = (i32, char);
@@ -64,6 +63,43 @@ impl Node {
         }
     }
 
+    fn remove(&self, key: i32) -> Result<Option<Node>, Errors> {
+        if key > self.key {
+            if let &Some(ref node) = &self.right {
+                let new_right = if node.key == key {
+                    None
+                } else {
+                    node.remove(key)?
+                };
+                Ok(Some(Node {
+                    key: self.key,
+                    value: self.value,
+                    left: self.left.clone(),
+                    right: new_right.map(|val| Rc::from(val)),
+                }))
+            } else {
+                Err(Errors::NoKeyFound)
+            }
+        } else if key < self.key {
+            if let &Some(ref node) = &self.left {
+                let new_left = if node.key == key {
+                    None
+                } else {
+                    node.remove(key)?
+                };
+                Ok(Some(Node {
+                    key: self.key,
+                    value: self.value,
+                    right: self.right.clone(),
+                    left: new_left.map(|val| Rc::from(val)),
+                }))
+            } else {
+                Err(Errors::NoKeyFound)
+            }
+        } else {
+            Err(Errors::MissedStep)
+    }
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -107,5 +143,11 @@ mod tests {
         println!("{:?}", &node);
         assert!(node.get(1).unwrap() == 'b');
         assert!(node.get(12).is_err());
+    }
+
+    #[test]
+    fn remove_leaf() {
+        let node = Node::new((2, 'a')).add((1, 'b')).remove(1).unwrap();
+        assert!(node.unwrap().get(1).is_err());
     }
 }
