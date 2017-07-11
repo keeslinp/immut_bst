@@ -1,49 +1,69 @@
 #![allow(dead_code)]
 use std::rc::Rc;
+use errors::Errors;
 type Pair = (i32, char);
 
 #[derive(Debug)]
 pub struct Node {
     left: Option<Rc<Node>>,
     right: Option<Rc<Node>>,
-    key: Option<i32>,
-    value: Option<char>,
+    key: i32,
+    value: char,
 }
 
-impl Node{
+impl Node {
     pub fn new((key, value): Pair) -> Self {
         Node {
             left: None,
             right: None,
-            key: Some(key),
-            value: Some(value),
+            key: key,
+            value: value,
         }
     }
 
-    pub fn new_with_children((key, value): Pair, left: Option<Rc<Node>>, right: Option<Rc<Node>>) -> Node {
+    fn new_with_children((key, value): Pair, left: Option<Rc<Node>>, right: Option<Rc<Node>>) -> Node {
         Node {
             left,
             right,
-            key: Some(key),
-            value: Some(value),
+            key: key,
+            value: value,
         }
     }
 
     pub fn add(&self, (key, value): Pair) -> Node {
-        if Some(key) > self.key {
+        if key > self.key {
             if let &Some(ref node) = &self.right {
-                Node::new_with_children((self.key.unwrap(), self.value.unwrap()), self.left.clone(), Some(Rc::from(node.add((key, value)))))
+                Node::new_with_children((self.key, self.value), self.left.clone(), Some(Rc::from(node.add((key, value)))))
             } else {
-                Node::new_with_children((self.key.unwrap(), self.value.unwrap()), self.left.clone(), Some(Rc::from(Node::new((key, value)))))
+                Node::new_with_children((self.key, self.value), self.left.clone(), Some(Rc::from(Node::new((key, value)))))
             }
         } else {
             if let &Some(ref node) = &self.left {
-                Node::new_with_children((self.key.unwrap(), self.value.unwrap()), Some(Rc::from(node.add((key, value)))), self.right.clone())
+                Node::new_with_children((self.key, self.value), Some(Rc::from(node.add((key, value)))), self.right.clone())
             } else {
-                Node::new_with_children((self.key.unwrap(), self.value.unwrap()), Some(Rc::from(Node::new((key, value)))), self.right.clone())
+                Node::new_with_children((self.key, self.value), Some(Rc::from(Node::new((key, value)))), self.right.clone())
             }
         }
     }
+
+    pub fn get(&self, key: i32) -> Result<char, Errors> {
+        if key > self.key {
+            if let &Some(ref node) = &self.right {
+                node.get(key)
+            } else {
+                Err(Errors::NoKeyFound)
+            }
+        } else if key < self.key {
+            if let &Some(ref node) = &self.left {
+                node.get(key)
+            } else {
+                Err(Errors::NoKeyFound)
+            }
+        } else {
+            Ok(self.value)
+        }
+    }
+
 }
 #[cfg(test)]
 mod tests {
@@ -55,30 +75,37 @@ mod tests {
     #[test]
     fn new_node() {
         let node = Node::new((1, 'a'));
-        assert!(node.value == Some('a') && node.key == Some(1));
+        assert!(node.value == 'a' && node.key == 1);
     }
 
     #[test]
     fn add_bigger_child() {
         let node = Node::new((1, 'a'));
         let new_tree = node.add((2, 'b'));
-        assert!(new_tree.right.unwrap().value == Some('b'));
+        assert!(new_tree.right.unwrap().value == 'b');
     }
 
     #[test]
     fn add_smaller_bigger() {
         let node = Node::new((4, 'a')).add((2, 'b')).add((3, 'c'));
-        assert!(node.left.as_ref().unwrap().right.as_ref().unwrap().value == Some('c'));
+        assert!(node.left.as_ref().unwrap().right.as_ref().unwrap().value == 'c');
     }
 
     #[test]
     fn add_bigger_smaller() {
         let node = Node::new((4, 'a')).add((9, 'b')).add((7, 'c'));
-        assert!(node.right.as_ref().unwrap().left.as_ref().unwrap().value == Some('c'));
+        assert!(node.right.as_ref().unwrap().left.as_ref().unwrap().value == 'c');
     }
     #[test]
     fn add_smaller_child() {
         let node = Node::new((2, 'a')).add((1, 'b'));
-        assert!(node.left.unwrap().value == Some('b'));
+        assert!(node.left.unwrap().value == 'b');
+    }
+    #[test]
+    fn get_value() {
+        let node = Node::new((2, 'a')).add((1, 'b'));
+        println!("{:?}", &node);
+        assert!(node.get(1).unwrap() == 'b');
+        assert!(node.get(12).is_err());
     }
 }
