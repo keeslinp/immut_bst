@@ -10,6 +10,30 @@ pub struct Node {
     value: char,
 }
 
+fn remove_child(node: &Rc<Node>) -> Option<Rc<Node>> {
+    match *node.as_ref() {
+        Node { left: None, right: None, .. } => {
+            None
+        },
+        Node { left: None, right: Some(ref node), .. } | Node { left: Some(ref node), right: None, .. } => {
+            Some(node.clone())
+        },
+        Node { left: Some(ref left), right: Some(ref right), .. } => {
+            let &Node { key, value, ..} = right.get_smallest_child();
+            Some(Rc::from(Node {
+                key: key,
+                value: value,
+                left: Some(left.clone()),
+                right: if key != right.key{
+                    Some(Rc::from(right.remove(key).unwrap().unwrap()))
+                } else {
+                    None
+                },
+            }))
+        }
+    }
+}
+
 impl Node {
     pub fn new((key, value): Pair) -> Self {
         Node {
@@ -31,13 +55,13 @@ impl Node {
 
     pub fn add(&self, (key, value): Pair) -> Result<Node, Errors> {
         if key > self.key {
-            if let &Some(ref node) = &self.right {
+            if let Some(ref node) = self.right {
                 Ok(Node::new_with_children((self.key, self.value), self.left.clone(), Some(Rc::from(node.add((key, value))?))))
             } else {
                 Ok(Node::new_with_children((self.key, self.value), self.left.clone(), Some(Rc::from(Node::new((key, value))))))
             }
         } else if key < self.key {
-            if let &Some(ref node) = &self.left {
+            if let Some(ref node) = self.left {
                 Ok(Node::new_with_children((self.key, self.value), Some(Rc::from(node.add((key, value))?)), self.right.clone()))
             } else {
                 Ok(Node::new_with_children((self.key, self.value), Some(Rc::from(Node::new((key, value)))), self.right.clone()))
@@ -47,15 +71,23 @@ impl Node {
         }
     }
 
+    fn get_smallest_child(&self) -> &Node {
+        if let Some(ref node) = self.left {
+            node.get_smallest_child()
+        } else {
+            self
+        }
+    }
+
     pub fn get(&self, key: i32) -> Result<char, Errors> {
         if key > self.key {
-            if let &Some(ref node) = &self.right {
+            if let Some(ref node) = self.right {
                 node.get(key)
             } else {
                 Err(Errors::NoKeyFound)
             }
         } else if key < self.key {
-            if let &Some(ref node) = &self.left {
+            if let Some(ref node) = self.left {
                 node.get(key)
             } else {
                 Err(Errors::NoKeyFound)
@@ -67,40 +99,40 @@ impl Node {
 
     fn remove(&self, key: i32) -> Result<Option<Node>, Errors> {
         if key > self.key {
-            if let &Some(ref node) = &self.right {
+            if let Some(ref node) = self.right {
                 let new_right = if node.key == key {
-                    None
+                   remove_child(node)
                 } else {
-                    node.remove(key)?
+                    node.remove(key)?.map(Rc::from)
                 };
                 Ok(Some(Node {
                     key: self.key,
                     value: self.value,
                     left: self.left.clone(),
-                    right: new_right.map(|val| Rc::from(val)),
+                    right: new_right,
                 }))
             } else {
                 Err(Errors::NoKeyFound)
             }
         } else if key < self.key {
-            if let &Some(ref node) = &self.left {
+            if let Some(ref node) = self.left {
                 let new_left = if node.key == key {
-                    None
+                    remove_child(node)
                 } else {
-                    node.remove(key)?
+                    node.remove(key)?.map(Rc::from)
                 };
                 Ok(Some(Node {
                     key: self.key,
                     value: self.value,
                     right: self.right.clone(),
-                    left: new_left.map(|val| Rc::from(val)),
+                    left: new_left,
                 }))
             } else {
                 Err(Errors::NoKeyFound)
             }
         } else {
             Err(Errors::MissedStep)
-    }
+        }
     }
 }
 #[cfg(test)]
@@ -151,5 +183,20 @@ mod tests {
     fn remove_leaf() {
         let node = Node::new((2, 'a')).add((1, 'b')).unwrap().remove(1).unwrap();
         assert!(node.unwrap().get(1).is_err());
+    }
+    #[test]
+    fn remove_one_child_branch() {
+        let node = Node::new((2, 'a')).add((1, 'b')).unwrap().add((0, 'c')).unwrap().remove(1).unwrap().unwrap();
+        assert!(node.get(1).is_err());
+        assert!(node.get(0).is_ok());
+        assert!(node.left.as_ref().unwrap().value == 'c');
+        assert!(node.add((1, 'b')).unwrap().remove(0).unwrap().unwrap().left.unwrap().value == 'b');
+    }
+
+    #[test]
+    fn remove_two_child_branch() {
+        let node = Node::new((2, 'a')).add((6, 'b')).unwrap().add((5, 'c')).unwrap().add((9, 'd')).unwrap();
+        assert!(node.remove(6).unwrap().unwrap().right.as_ref().unwrap().value == 'd');
+        assert!(node.add((8, 'e')).unwrap().remove(6).unwrap().unwrap().right.as_ref().unwrap().value == 'e');
     }
 }
