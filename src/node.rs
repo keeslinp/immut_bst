@@ -29,19 +29,21 @@ impl Node {
         }
     }
 
-    pub fn add(&self, (key, value): Pair) -> Node {
+    pub fn add(&self, (key, value): Pair) -> Result<Node, Errors> {
         if key > self.key {
             if let &Some(ref node) = &self.right {
-                Node::new_with_children((self.key, self.value), self.left.clone(), Some(Rc::from(node.add((key, value)))))
+                Ok(Node::new_with_children((self.key, self.value), self.left.clone(), Some(Rc::from(node.add((key, value))?))))
             } else {
-                Node::new_with_children((self.key, self.value), self.left.clone(), Some(Rc::from(Node::new((key, value)))))
+                Ok(Node::new_with_children((self.key, self.value), self.left.clone(), Some(Rc::from(Node::new((key, value))))))
+            }
+        } else if key < self.key {
+            if let &Some(ref node) = &self.left {
+                Ok(Node::new_with_children((self.key, self.value), Some(Rc::from(node.add((key, value))?)), self.right.clone()))
+            } else {
+                Ok(Node::new_with_children((self.key, self.value), Some(Rc::from(Node::new((key, value)))), self.right.clone()))
             }
         } else {
-            if let &Some(ref node) = &self.left {
-                Node::new_with_children((self.key, self.value), Some(Rc::from(node.add((key, value)))), self.right.clone())
-            } else {
-                Node::new_with_children((self.key, self.value), Some(Rc::from(Node::new((key, value)))), self.right.clone())
-            }
+            Err(Errors::DuplicateKey)
         }
     }
 
@@ -117,29 +119,29 @@ mod tests {
     #[test]
     fn add_bigger_child() {
         let node = Node::new((1, 'a'));
-        let new_tree = node.add((2, 'b'));
+        let new_tree = node.add((2, 'b')).unwrap();
         assert!(new_tree.right.unwrap().value == 'b');
     }
 
     #[test]
     fn add_smaller_bigger() {
-        let node = Node::new((4, 'a')).add((2, 'b')).add((3, 'c'));
+        let node = Node::new((4, 'a')).add((2, 'b')).unwrap().add((3, 'c')).unwrap();
         assert!(node.left.as_ref().unwrap().right.as_ref().unwrap().value == 'c');
     }
 
     #[test]
     fn add_bigger_smaller() {
-        let node = Node::new((4, 'a')).add((9, 'b')).add((7, 'c'));
+        let node = Node::new((4, 'a')).add((9, 'b')).unwrap().add((7, 'c')).unwrap();
         assert!(node.right.as_ref().unwrap().left.as_ref().unwrap().value == 'c');
     }
     #[test]
     fn add_smaller_child() {
-        let node = Node::new((2, 'a')).add((1, 'b'));
+        let node = Node::new((2, 'a')).add((1, 'b')).unwrap();
         assert!(node.left.unwrap().value == 'b');
     }
     #[test]
     fn get_value() {
-        let node = Node::new((2, 'a')).add((1, 'b'));
+        let node = Node::new((2, 'a')).add((1, 'b')).unwrap();
         println!("{:?}", &node);
         assert!(node.get(1).unwrap() == 'b');
         assert!(node.get(12).is_err());
@@ -147,7 +149,7 @@ mod tests {
 
     #[test]
     fn remove_leaf() {
-        let node = Node::new((2, 'a')).add((1, 'b')).remove(1).unwrap();
+        let node = Node::new((2, 'a')).add((1, 'b')).unwrap().remove(1).unwrap();
         assert!(node.unwrap().get(1).is_err());
     }
 }

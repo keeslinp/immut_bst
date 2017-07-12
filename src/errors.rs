@@ -1,5 +1,6 @@
 #[derive(Debug)]
 pub enum Errors {
     NoKeyFound,
-    MissedStep
+    MissedStep,
+    DuplicateKey,
 }
